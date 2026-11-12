@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+{% block title %}{{ l.title | nice_title }} · Zameen Scrapper{% endblock %}
+{% block content %}
+{% set rent = l.purpose == "for-rent" %}
+{% set mine = (l.price / l.area_marla) if l.price and l.area_marla else none %}
+<style>
+  .crumbs { font-size: 13px; color: var(--muted); margin-bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .crumbs a { color: var(--muted); }
+  .crumbs a:hover { color: var(--accent); }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 28px; padding: 22px 24px; margin-bottom: 16px; }
+  @media (max-width: 800px) { .hero { grid-template-columns: 1fr; } }
+  .hero h1 { font-size: 23px; line-height: 1.3; margin: 8px 0 6px; }
+  .hero .where { color: var(--muted); font-size: 15px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .price-box { text-align: right; min-width: 220px; }
+  @media (max-width: 800px) { .price-box { text-align: left; } }
+  .price-box .k { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .price-box .v { font-size: 32px; font-weight: 800; color: var(--accent); letter-spacing: -.02em; line-height: 1.15; }
+  .price-box .v small { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .price-box .s { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .facts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;
+           border-top: 1px solid var(--line); padding-top: 16px; }
+  .fact { background: var(--soft); border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; }
+  .fact .k { font-size: 12px; color: var(--muted); }
+  .fact .v { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .fact .s { font-size: 12px; color: var(--muted); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; align-items: start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .box { margin-bottom: 16px; overflow: hidden; }
+  .box h2 { margin: 0; padding: 13px 18px; font-size: 15px; border-bottom: 1px solid var(--line); }
+  .box .body { padding: 16px 18px; }
+  table.kv td { padding: 9px 18px; }
+  table.kv td:first-child { color: var(--muted); width: 36%; white-space: nowrap; }
+  .desc { line-height: 1.65; font-size: 14.5px; }
+  table.kv tr.sec td { background: var(--soft); color: var(--text); font-weight: 700; font-size: 13px; padding: 8px 18px; }
+  table.kv td.val { overflow-wrap: anywhere; }
+  details.raw { border-top: 1px solid var(--line); }
+  details.raw summary { cursor: pointer; padding: 12px 18px; color: var(--accent); font-weight: 600; font-size: 13px; }
+  details.raw pre { margin: 0; padding: 14px 18px; background: var(--soft); font-size: 12px; line-height: 1.5;
+                    max-height: 420px; overflow: auto; border-top: 1px solid var(--line); }
+
+  /* market comparison */
+  .verdict { font-size: 16px; font-weight: 650; margin-bottom: 4px; }
+  .verdict.cheap { color: var(--good); } .verdict.dear { color: var(--low); } .verdict.fair { color: var(--ok); }
+  .range { position: relative; height: 10px; border-radius: 99px; margin: 26px 4px 30px;
+           background: linear-gradient(90deg, var(--good-soft), var(--ok-soft), var(--low-soft)); border: 1px solid var(--line); }
+  .range .mid { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--muted); }
+  .range .mid span, .range .me span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 11.5px; }
+  .range .mid span { top: 22px; color: var(--muted); }
+  .range .me { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--accent);
+               border: 3px solid var(--card); transform: translate(-50%, -50%); box-shadow: 0 0 0 1px var(--accent); }
+  .range .me span { bottom: 20px; left: 50%; font-weight: 700; color: var(--accent); }
+  .range-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: -18px; }
+  .stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; text-align: center; }
+  .stats3 > div { background: var(--soft); border-radius: 8px; padding: 8px; }
+  .stats3 .k { font-size: 11.5px; color: var(--muted); }
+  .stats3 .v { font-weight: 700; }
+
+  /* similar ads */
+  .sim { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; padding: 11px 18px; border-top: 1px solid var(--line); position: relative; }
+  .sim:first-child { border-top: 0; }
+  .sim:hover { background: var(--soft); }
+  .sim a { color: var(--text); font-weight: 600; }
+  .sim a::after { content: ""; position: absolute; inset: 0; }
+  .sim .p { font-weight: 700; color: var(--accent); text-align: right; white-space: nowrap; }
+  .sim .m { font-size: 12px; color: var(--muted); }
+
+  .map { display: block; width: 100%; height: 260px; border: 0; }
+
+  /* contact */
+  .contact .who { display: flex; gap: 12px; align-items: center; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+            display: grid; place-items: center; font-weight: 750; font-size: 17px; flex: none; }
+  .contact .name { font-size: 16px; font-weight: 650; }
+  .contact .agency { color: var(--muted); font-size: 13px; }
+  .contact .line { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .contact .line:first-of-type { margin-top: 14px; }
+  .contact .num { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .contact .acts { display: flex; gap: 6px; }
+  .contact .acts .btn, .contact .acts button { padding: 5px 11px; font-size: 12.5px; }
+
+  .hist { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-top: 1px solid var(--line); }
+  .hist:first-child { border-top: 0; }
+  .up { color: var(--low); } .down { color: var(--good); }
+  .changes td { vertical-align: top; }
+  .changes td.when { white-space: nowrap; }
+  .changes td.val { max-width: 260px; overflow-wrap: anywhere; }
+  .changes td.old { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(192, 54, 44, .45); }
+</style>
+
+<nav class="crumbs">
+  <a href="javascript:history.back()">← Back</a><span>·</span>
+  <a href="{{ url_for('listings', city=l.city) }}">{{ l.city }}</a><span>›</span>
+  <a href="{{ url_for('listings', city=l.city, purpose=l.purpose, type=l.category_key.split('/')[1]) }}">{{ labels.get(l.category_key, l.category_key) }}</a>
+  {% set area_name = (l.location_path or "").split(" > ")[2] if (l.location_path or "").split(" > ") | length > 2 else none %}
+  {% if area_name %}<span>›</span><a href="{{ url_for('listings', city=l.city, purpose=l.purpose, type=l.category_key.split('/')[1], area=area_name) }}">{{ area_name }}</a>{% endif %}
+</nav>
+
+<div class="card hero">
+  <div>
+    <div class="badges">
+      {% if l.is_active %}<span class="badge b-good">● Active on Zameen</span>{% else %}<span class="badge b-low">Gone from Zameen</span>{% endif %}
+      {% if l.verified %}<span class="badge b-good">✓ Verified by Zameen</span>{% endif %}
+      {% if l.listing_tier in ("hot", "superhot") %}<span class="badge b-ok">{{ l.listing_tier | capitalize }}</span>{% endif %}
+      <span class="badge b-none">{{ labels.get(l.category_key, l.category_key) }}</span>
+    </div>
+    <h1>{{ l.title | nice_title }}</h1>
+    <div class="where">📍 {{ l.location_path | area }}, {{ l.city }}</div>
+  </div>
+  <div class="price-box">
+    <div class="k">{{ "Monthly rent" if rent else "Asking price" }}</div>
+    <div class="v">{{ l.price | pkr }}{% if rent %} <small>/ month</small>{% endif %}</div>
+    <div class="s">PKR {{ l.price | num }}</div>
+    {% if l.url %}<a class="btn" href="{{ l.url }}" target="_blank" rel="noopener">Open on Zameen ↗</a>{% endif %}
+  </div>
+  <div class="facts">
+    <div class="fact"><div class="k">📐 Size</div><div class="v">{{ l.area_marla | num }} marla</div><div class="s">{{ l.area_sqft | num }} sq ft</div></div>
+    {% if l.beds %}<div class="fact"><div class="k">🛏 Bedrooms</div><div class="v">{{ l.beds }}</div></div>{% endif %}
+    {% if l.baths %}<div class="fact"><div class="k">🛁 Bathrooms</div><div class="v">{{ l.baths }}</div></div>{% endif %}
+    {% if mine %}<div class="fact"><div class="k">💰 Per marla</div><div class="v">{{ mine | int | pkr }}</div><div class="s">{{ "rent" if rent else "price" }} ÷ size</div></div>{% endif %}
+    <div class="fact"><div class="k">🕒 Posted</div><div class="v">{{ l.zameen_created | ago }}</div>
+      <div class="s">{{ l.zameen_created.strftime("%d %b %Y") if l.zameen_created else "" }}</div></div>
+  </div>
+</div>
+
+<div class="layout">
+  <div>
+    {% if market %}
+    {% set pct_diff = (market.diff * 100) | round | int %}
+    <div class="card box">
+      <h2>Price check <span class="muted small" style="font-weight: 400">· vs {{ market.n | num }} similar ads in {{ market.area }}</span></h2>
+      <div class="body">
+        {% if pct_diff <= -10 %}<div class="verdict cheap">{{ -pct_diff }}% below the usual price here</div>
+        {% elif pct_diff >= 10 %}<div class="verdict dear">{{ pct_diff }}% above the usual price here</div>
+        {% else %}<div class="verdict fair">Close to the usual price here ({{ "%+d" | format(pct_diff) }}%)</div>{% endif %}
+        <div class="muted small">Per marla, compared with active {{ labels.get(l.category_key, l.category_key) | lower }} of
+          {{ (l.area_marla / 2) | round(1) | num }}–{{ (l.area_marla * 2) | round(1) | num }} marla in {{ market.area }}.</div>
+        {# the bar runs from half the median to double the median; the dot is this ad #}
+        {% set lo, hi = market.median * 0.5, market.median * 1.5 %}
+        {% set pos = (((market.mine - lo) / (hi - lo)) * 100) %}
+        {% set pos = [[pos, 0] | max, 100] | min %}
+        <div class="range">
+          <div class="mid" style="left: 50%"><span>usual {{ market.median | int | pkr }}</span></div>
+          <div class="me" style="left: {{ pos }}%"><span>this ad {{ market.mine | int | pkr }}</span></div>
+        </div>
+        <div class="range-ends"><span>cheaper</span><span>dearer</span></div>
+        <div class="stats3">
+          <div><div class="k">Cheaper quarter up to</div><div class="v">{{ market.low | int | pkr }}</div></div>
+          <div><div class="k">Usual (middle)</div><div class="v">{{ market.median | int | pkr }}</div></div>
+          <div><div class="k">Dearer quarter from</div><div class="v">{{ market.high | int | pkr }}</div></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if l.short_description %}
+    <div class="card box">
+      <h2>Description</h2>
+      <div class="body desc">{{ l.short_description }}{% if l.short_description | length >= 95 %}…{% endif %}
+        {% if l.url %}<div class="muted small" style="margin-top: 8px">Full description on <a href="{{ l.url }}" target="_blank" rel="noopener">Zameen ↗</a></div>{% endif %}</div>
+    </div>
+    {% endif %}
+
+    {% if similar %}
+    <div class="card box">
+      <h2>Similar ads nearby <span class="muted small" style="font-weight: 400">· same type, similar size, {{ market.area }}</span></h2>
+      {% for s in similar %}
+      <div class="sim">
+        <div><a href="{{ url_for('listing', listing_id=s.id) }}">{{ s.title | nice_title }}</a>
+          <div class="m">📍 {{ s.location_path | area }} · {{ s.area_marla | num }} marla{% if s.beds %} · {{ s.beds }} beds{% endif %} · {{ s.zameen_created | ago }}</div></div>
+        <div><div class="p">{{ s.price | pkr }}</div><div class="m" style="text-align: right">{{ s.per_marla | int | pkr }} / marla</div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% macro dt(moment) %}{{ moment.strftime("%d %b %Y, %I:%M %p") ~ " (" ~ (moment | ago) ~ ")" if moment else "-" }}{% endmacro %}
+    <div class="card box">
+      <h2>All details</h2>
+      <table class="kv"><tbody>
+        <tr class="sec"><td colspan="2">🏠 Property</td></tr>
+        <tr><td>Type</td><td>{{ l.type }} <span class="muted">({{ l.category_group }})</span></td></tr>
+        <tr><td>Purpose</td><td>{{ "For sale" if l.purpose == "for-sale" else "For rent" }}</td></tr>
+        <tr><td>Size</td><td>{{ l.area_marla | num }} marla · {{ l.area_sqft | num }} sq ft · {{ l.area_sqm | num }} m²
+          {% if l.area_marla and l.area_marla >= 20 %}<span class="muted">· {{ (l.area_marla / 20) | round(2) | num }} kanal</span>{% endif %}</td></tr>
+        {% if l.category_group == "Homes" or l.beds %}<tr><td>Bedrooms</td><td>{{ l.beds or "not given by the dealer" }}</td></tr>{% endif %}
+        {% if l.category_group == "Homes" or l.baths %}<tr><td>Bathrooms</td><td>{{ l.baths or "not given by the dealer" }}</td></tr>{% endif %}
+
+        <tr class="sec"><td colspan="2">💰 Price</td></tr>
+        <tr><td>{{ "Monthly rent" if rent else "Asking price" }}</td><td><b>PKR {{ l.price | num }}</b> <span class="muted">({{ l.price | pkr }})</span></td></tr>
+        {% if mine %}<tr><td>Per marla</td><td>PKR {{ mine | int | num }}</td></tr>{% endif %}
+        {% if l.price and l.area_sqft %}<tr><td>Per sq ft</td><td>PKR {{ (l.price / l.area_sqft) | round | int | num }}</td></tr>{% endif %}
+        {% if l.remaining_installments %}<tr><td>Installments left</td><td>{{ l.remaining_installments }} <span class="muted">(installment plan)</span></td></tr>{% endif %}
+        <tr><td>Price changes seen</td><td>{{ (prices | length - 1) if prices else 0 }}
+          {% if prices | length > 1 %}<span class="muted">· first {{ prices[0].price | pkr }} on {{ prices[0].seen_on.strftime("%d %b %Y") }}</span>{% endif %}</td></tr>
+
+        <tr class="sec"><td colspan="2">📍 Location</td></tr>
+        <tr><td>City</td><td>{{ l.city }}</td></tr>
+        <tr><td>Full location</td><td>{{ l.location_path }}</td></tr>
+        <tr><td>Coordinates</td><td>{% if l.lat %}{{ "%.6f" | format(l.lat) }}, {{ "%.6f" | format(l.lng) }}
+          <span class="badge {{ 'b-good' if l.exact_geography else 'b-ok' }}">{{ "exact" if l.exact_geography else "approximate" }}</span>{% else %}-{% endif %}</td></tr>
+        <tr><td>Zameen area ID</td><td>{{ l.location_id or "-" }}</td></tr>
+
+        <tr class="sec"><td colspan="2">👤 Dealer</td></tr>
+        <tr><td>Contact name</td><td>{{ l.contact_name or "-" }}</td></tr>
+        <tr><td>Agency</td><td>{% if agency %}{{ agency.name }} <span class="muted">· {{ agency.ads | num }} active ads with us</span>{% else %}Individual (no agency){% endif %}</td></tr>
+        {% if agency %}
+        <tr><td>Agency package</td><td>{{ agency.product or "-" }}{% if agency.tier %} <span class="muted">· tier {{ agency.tier }}</span>{% endif %}{% if agency.product_score %} <span class="muted">· score {{ agency.product_score }}</span>{% endif %}</td></tr>
+        <tr><td>Agency on Zameen since</td><td>{{ agency.zameen_created.strftime("%d %b %Y") if agency.zameen_created else "-" }}</td></tr>
+        {% endif %}
+        <tr><td>Mobile</td><td>{{ l.mobile or "-" }}</td></tr>
+        <tr><td>Phone</td><td>{{ l.phone or "-" }}</td></tr>
+        <tr><td>WhatsApp</td><td>{{ ("+" ~ (l.whatsapp | replace("+", ""))) if l.whatsapp else "-" }}</td></tr>
+
+        <tr class="sec"><td colspan="2">📰 The ad on Zameen</td></tr>
+        <tr><td>Status</td><td>{% if l.is_active %}<span class="badge b-good">Active</span>{% else %}<span class="badge b-low">Gone</span> <span class="muted">(a full scrape no longer found it)</span>{% endif %}</td></tr>
+        <tr><td>Verified by Zameen</td><td>{{ "Yes ✓" if l.verified else "No" }}</td></tr>
+        <tr><td>Ad placement</td><td>{{ (l.listing_tier or "-") | capitalize }} <span class="muted">(paid tier: superhot > hot > premium)</span></td></tr>
+        <tr><td>Posted on Zameen</td><td>{{ dt(l.zameen_created) }}</td></tr>
+        <tr><td>Last updated on Zameen</td><td>{{ dt(l.zameen_updated) }}</td></tr>
+        <tr><td>Zameen ad number</td><td>{{ l.id }} <span class="muted">· internal {{ l.object_id or "-" }}</span></td></tr>
+        {% if l.title_ur %}<tr><td>Urdu title</td><td dir="rtl">{{ l.title_ur }}</td></tr>{% endif %}
+        <tr><td>Link</td><td class="val">{% if l.url %}<a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url }}</a>{% else %}-{% endif %}</td></tr>
+
+        <tr class="sec"><td colspan="2">🗂 In our database</td></tr>
+        <tr><td>First seen / last seen</td><td>{{ l.first_seen.strftime("%d %b %Y") }} · {{ l.last_seen.strftime("%d %b %Y") }}</td></tr>
+        <tr><td>Found by</td><td>{% if found_check %}new-ad check #{{ found_check.id }} on {{ found_check.started_at | pk_time }}{% else %}a full scrape{% endif %}</td></tr>
+        <tr><td>Last full scrape that saw it</td><td>{% if seen_pass %}#{{ seen_pass.id }} on {{ seen_pass.started_at | pk_time }}{% else %}none yet (found by a new-ad check after the last full scrape){% endif %}</td></tr>
+        <tr><td>Edits seen</td><td>{{ edits }}</td></tr>
+        <tr><td>Category key</td><td><code>{{ l.category_key }}</code></td></tr>
+      </tbody></table>
+      {% if raw %}
+      <details class="raw"><summary>Everything Zameen sent for this ad (raw data)</summary><pre>{{ raw }}</pre></details>
+      {% endif %}
+    </div>
+
+    <div class="card box">
+      <h2>Changes seen <span class="muted small" style="font-weight: 400">· edits to this ad between our scrapes</span></h2>
+      {% if changes %}
+      <div class="table-wrap"><table class="changes">
+        <thead><tr><th>Date</th><th>What</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>{% for c in changes %}<tr><td class="muted when">{{ c.changed_on.strftime("%d %b %Y") }}</td>
+          <td>{{ c.field | replace("_", " ") | capitalize }}</td>
+          <td class="val old">{{ c.old_value or "-" }}</td><td class="val">{{ c.new_value or "-" }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="body muted">No changes seen yet.</div>{% endif %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card box contact">
+      <h2>Contact</h2>
+      <div class="body">
+        <div class="who">
+          <div class="avatar">{{ (l.contact_name or agency.name if agency else l.contact_name or "?")[:1] | upper }}</div>
+          <div><div class="name">{{ l.contact_name or "Not given" }}</div>
+            <div class="agency">{{ agency.name if agency else "Individual (no agency)" }}{% if agency and agency.product %} · {{ agency.product }}{% endif %}</div></div>
+        </div>
+        {% for n in (l.mobile or "").split(", ") if n %}
+        <div class="line"><span><span class="muted small">Mobile</span><br><span class="num">{{ n }}</span></span>
+          <span class="acts"><button class="btn ghost" type="button" onclick="copyNum(this, '{{ n }}')">Copy</button><a class="btn ghost" href="tel:{{ n }}">Call</a></span></div>
+        {% endfor %}
+        {% for n in (l.phone or "").split(", ") if n and n not in (l.mobile or "") %}
+        <div class="line"><span><span class="muted small">Phone</span><br><span class="num">{{ n }}</span></span>
+          <span class="acts"><button class="btn ghost" type="button" onclick="copyNum(this, '{{ n }}')">Copy</button><a class="btn ghost" href="tel:{{ n }}">Call</a></span></div>
+        {% endfor %}
+        {% if l.whatsapp %}{% set wa = l.whatsapp | replace("+", "") %}
+        <div class="line"><span><span class="muted small">WhatsApp</span><br><span class="num">+{{ wa }}</span></span>
+          <span class="acts"><a class="btn ghost" href="https://wa.me/{{ wa }}" target="_blank" rel="noopener">Chat</a></span></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if l.lat and l.lng %}
+    <div class="card box">
+      <h2>Map {% if not l.exact_geography %}<span class="muted small" style="font-weight: 400">· approximate</span>{% endif %}</h2>
+      <iframe class="map" loading="lazy" title="Map"
+        src="https://www.openstreetmap.org/export/embed.html?bbox={{ l.lng - 0.008 }}%2C{{ l.lat - 0.005 }}%2C{{ l.lng + 0.008 }}%2C{{ l.lat + 0.005 }}&layer=mapnik&marker={{ l.lat }}%2C{{ l.lng }}"></iframe>
+      <div class="body" style="padding: 10px 18px"><a href="https://www.google.com/maps?q={{ l.lat }},{{ l.lng }}" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>
+    </div>
+    {% endif %}
+
+    <div class="card box">
+      <h2>Price history</h2>
+      {% for p in prices | reverse %}
+      <div class="hist"><span class="muted">{{ p.seen_on.strftime("%d %b %Y") }}</span>
+        <span style="text-align: right"><b>{{ p.price | pkr }}</b>
+          {% if not loop.last %}{% set before = (prices | reverse | list)[loop.index] %}{% set diff = p.price - before.price %}
+            <div class="small {{ 'up' if diff > 0 else 'down' }}">{{ "▲" if diff > 0 else "▼" }} {{ (diff | abs) | pkr }}</div>
+          {% else %}<div class="muted small">first seen</div>{% endif %}</span></div>
+      {% else %}<div class="body muted">No price recorded.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+  function copyNum(btn, n) {
+    navigator.clipboard.writeText(n).then(() => { const t = btn.textContent; btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = t, 1400); });
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block head %}
+{# while a check is starting or running, reload every few seconds to show progress (without ?starting) #}
+{% if starting %}<meta http-equiv="refresh" content="4; url={{ link() }}">
+{% elif running %}<meta http-equiv="refresh" content="10; url={{ link() }}">{% endif %}
+{% endblock %}
+{% block title %}New listings · Zameen Scrapper{% endblock %}
+{% block content %}
+{% from "_ad_card.html" import ad_card, pager %}
+<style>
+  /* check-now bar */
+  .runbar { padding: 16px 20px; margin-bottom: 14px; display: flex; justify-content: space-between;
+            align-items: center; gap: 16px; flex-wrap: wrap; }
+  .runbar.live { border-left: 4px solid var(--accent); }
+  .runbar .state { display: flex; align-items: center; gap: 14px; }
+  .runbar .icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 19px;
+                  background: var(--accent-soft); flex: none; }
+  .runbar .big { font-size: 16px; font-weight: 650; }
+  .runbar form { margin: 0; }
+  .runbar button { font-size: 15px; padding: 10px 20px; }
+  .runbar button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.stop { background: var(--low); }
+  .btn.stop:hover { background: var(--low); filter: brightness(.9); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; flex: none; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  .last-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .warn { margin-top: 6px; font-size: 12.5px; color: var(--low); }
+
+  /* filters */
+  .picker { padding: 14px 16px; margin-bottom: 12px; display: grid; gap: 14px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+  .row .left { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .by-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin: 0; }
+  .by-check select { width: auto; max-width: min(420px, 100%); text-overflow: ellipsis; }
+
+  .summary { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line); }
+  .summary .total { font-size: 28px; font-weight: 800; color: var(--accent); letter-spacing: -.02em; line-height: 1; }
+  .summary .total small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 3px; }
+  .days { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day { padding: 5px 11px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-size: 12.5px; }
+  .day b { font-variant-numeric: tabular-nums; }
+  .cat-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: start; }
+  @media (max-width: 700px) { .cat-row { grid-template-columns: 1fr; } }
+  .cat-row > b { padding-top: 5px; font-size: 13.5px; }
+
+  .results-bar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }
+  .results-bar .count { font-size: 15px; }
+</style>
+
+<h1>New listings <span class="muted" style="font-weight: 500">· {{ city or "All cities" }}</span></h1>
+<p class="sub">Ads that are new on Zameen, newest first: found by the new-ad checks, or by a full scrape right after they were posted.</p>
+
+{# ---------- check now / running / last check ---------- #}
+{% if running %}
+<div class="card runbar live">
+  <div class="state"><span class="dot"></span>
+    <div><div class="big">{{ "Stopping… (a few seconds)" if stopping else "Checking Zameen for new ads…" }}</div>
+      <div class="muted small">Check #{{ running.id }} · started {{ running.started_at.strftime("%H:%M") }} ({{ running.started_at | duration }})
+        · <b>{{ running.new_listings | num }}</b> new so far · {{ running.pages_fetched | num }} pages
+        {% if running.errors %}· <span style="color: var(--low)">{{ running.errors }} errors</span>{% endif %}
+        · this page updates itself</div></div>
+  </div>
+  {% if not stopping %}
+  <form method="post" action="{{ url_for('stop_check', city=city) }}">
+    <button class="btn stop" title="Stops within a few seconds; new ads found so far stay saved">■ Stop</button>
+  </form>
+  {% endif %}
+</div>
+{% elif starting %}
+<div class="card runbar live">
+  <div class="state"><span class="dot"></span><div class="big">Starting the check…</div></div>
+</div>
+{% else %}
+<div class="card runbar">
+  <div class="state">
+    <div class="icon">🔄</div>
+    <div>
+      <div class="big">Check Zameen for new ads</div>
+      {% if other_scrape %}
+      <div class="muted small">Another scrape is running right now: wait until it finishes (one at a time).</div>
+      {% elif last %}
+      <div class="muted small last-line">Last check #{{ last.id }} · {{ last.started_at.strftime("%d %b, %H:%M") }}
+        {% if last.status == "done" %}<span class="badge b-good">done</span>
+        {% elif last.status == "stopped" %}<span class="badge b-ok">stopped</span>
+        {% else %}<span class="badge b-low">{{ last.status }}</span>{% endif %}
+        · {{ last.new_listings | num }} new · {{ last.pages_fetched | num }} pages
+        {% if last.finished_at %}· took {{ last.started_at | duration(last.finished_at) }}{% endif %}</div>
+      {% if last.status == "failed" and last.errors and not last.pages_fetched %}
+      <div class="warn">⚠ Zameen refused every page in the last check. If it keeps happening, it's blocking the scraper: don't keep pressing the button.</div>
+      {% endif %}
+      {% else %}
+      <div class="muted small">No check has run yet.</div>
+      {% endif %}
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('start_check', city=city) }}">
+    <button {{ "disabled" if other_scrape }} title="Every city, back to its last check; stops by itself when done">▶ Check for new ads now</button>
+  </form>
+</div>
+{% endif %}
+
+{# ---------- what to show ---------- #}
+<div class="card picker">
+  <div class="row">
+    <div class="left">
+      <div class="seg">
+        {% for key, p in periods.items() %}
+        <a href="{{ link(period=key, check=None, category=None) }}" class="{{ 'on' if args.period == key }}">{{ p[0] }}</a>
+        {% endfor %}
+      </div>
+      <form method="get" class="by-check">
+        {% for k in ("purpose", "city") %}{% if args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ args[k] }}">{% endif %}{% endfor %}
+        or by check
+        <select name="check" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if by_check is none }}>—</option>
+          {% for c in checks %}
+          {% set names = (c.cities or "").split(", ") if c.cities else [] %}
+          <option value="{{ c.id }}" {{ 'selected' if by_check == c.id }} title="{{ c.cities or '' }}">
+            #{{ c.id }} · {{ c.started_at.strftime("%d %b, %H:%M") }} · {{ c.new_listings | num }} new
+            {%- if c.status != "done" %} ({{ c.status }}){% endif %}
+            {%- if names | length > 3 %} · {{ names | length }} cities{% elif names %} · {{ names | join(", ") }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit">Show</button></noscript>
+      </form>
+    </div>
+    <div class="seg">
+      <a href="{{ link(purpose=None, category=None) }}" class="{{ 'on' if not args.purpose }}">All</a>
+      <a href="{{ link(purpose='for-sale', category=None) }}" class="{{ 'on' if args.purpose == 'for-sale' }}">For sale</a>
+      <a href="{{ link(purpose='for-rent', category=None) }}" class="{{ 'on' if args.purpose == 'for-rent' }}">For rent</a>
+    </div>
+  </div>
+
+  <div class="summary">
+    <div class="total">{{ all_total | num }}<small>new ads {{ ("in check #" ~ by_check) if by_check is not none else periods[args.period][0] | lower }}</small></div>
+    {% if per_day | length > 1 %}
+    <div class="days">{% for d in per_day[:10] %}<span class="day">{{ d.day | day_word | capitalize }} · <b>{{ d.n | num }}</b></span>{% endfor %}</div>
+    {% endif %}
+  </div>
+
+  {% if chips %}
+  <div class="chips">
+    <a class="chip {{ 'on' if not category }}" href="{{ link(category=None) }}">All categories <span>{{ all_total | num }}</span></a>
+  </div>
+  {% for group, items in chips.items() %}
+  <div class="cat-row">
+    <b>{{ group }}</b>
+    <div class="chips">
+      {% for c in items %}
+      <a class="chip {{ 'on' if category == c.key }}" href="{{ link(category=c.key) }}">{{ c.label }} <span>{{ c.count | num }}</span></a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+
+{# ---------- the ads ---------- #}
+{% if rows %}
+<div class="results-bar">
+  <div class="count"><b>{{ total | num }}</b> <span class="muted">new {{ labels.get(category, "ads") | lower if category else "ads" }}{% if city %} in {{ city }}{% endif %}</span></div>
+  <div class="muted small">Newest found first</div>
+</div>
+<div class="ads">
+  {% for r in rows %}{{ ad_card(r, city, labels, found=true) }}{% endfor %}
+</div>
+{{ pager(page, pages, page_links, link, total, per_page) }}
+{% else %}
+<div class="card empty muted">
+  <div class="big">🗓</div>
+  <p>No new ads {% if by_check is not none %}in check #{{ by_check }}{% else %}{{ periods[args.period][0] | lower }}{% endif %}{% if city %} in {{ city }}{% endif %}.</p>
+  {% if by_check is none and args.period != "30d" %}<a class="btn ghost" href="{{ link(period='30d', category=None) }}">Show the last 30 days</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

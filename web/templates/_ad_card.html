@@ -1,0 +1,47 @@
+{# One ad as a card (Listings and New listings pages). `found` = also show when we first saved it. #}
+{% macro ad_card(r, city, labels, found=false) %}
+<article class="card ad {{ 'gone' if r.is_active is defined and not r.is_active }}">
+  <div>
+    <div class="kind">
+      {% if found %}<span class="badge b-blue">New · found {{ r.first_seen | day_word }}</span>{% endif %}
+      <span>{{ labels.get(r.category_key, r.category_key) }}{% if not city %} · {{ r.city }}{% endif %}</span>
+      {% if r.verified %}<span class="badge b-good">✓ Verified</span>{% endif %}
+      {% if r.listing_tier in ("hot", "superhot") %}<span class="badge b-ok">{{ r.listing_tier | capitalize }}</span>{% endif %}
+      {% if r.is_active is defined and not r.is_active %}<span class="badge b-low">Gone from Zameen</span>{% endif %}
+    </div>
+    <h3><a href="{{ url_for('listing', listing_id=r.id) }}">{{ r.title | nice_title }}</a></h3>
+    <div class="where">📍 {{ r.location_path | area }}</div>
+    <div class="facts">
+      {% if r.area_marla %}<span>📐 <b>{{ r.area_marla | num }}</b> marla</span>{% endif %}
+      {% if r.beds %}<span>🛏 <b>{{ r.beds }}</b> {{ "bed" if r.beds == 1 else "beds" }}</span>{% endif %}
+      {% if r.baths %}<span>🛁 <b>{{ r.baths }}</b> {{ "bath" if r.baths == 1 else "baths" }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="right">
+    <div>
+      <div class="price">{{ r.price | pkr }}{% if r.category_key.startswith('for-rent') %} <small>/ month</small>{% endif %}</div>
+      {% if r.per_marla %}<div class="per">{{ r.per_marla | int | pkr }} per marla</div>{% endif %}
+    </div>
+  </div>
+  <div class="foot">
+    <span class="dealer"><b>{{ r.agency_name or r.contact_name or "Dealer not given" }}</b>{% if r.agency_name and r.contact_name %} · {{ r.contact_name }}{% endif %}{% if r.mobile %} · {{ r.mobile.split(", ")[0] }}{% endif %}</span>
+    <span>Posted {{ r.zameen_created | ago }}{% if r.url %} · <a href="{{ r.url }}" target="_blank" rel="noopener" title="Open on Zameen.com">Zameen ↗</a>{% endif %}</span>
+  </div>
+</article>
+{% endmacro %}
+
+{# Numbered pager: page_links from the view (numbers, None = gap). #}
+{% macro pager(page, pages, page_links, link, total, per_page) %}
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a href="{{ link(page=page - 1) }}" title="Previous page">‹</a>{% endif %}
+  {% for n in page_links %}
+    {% if n is none %}<span class="gap">…</span>
+    {% elif n == page %}<span class="cur">{{ n | num }}</span>
+    {% else %}<a href="{{ link(page=n) }}">{{ n | num }}</a>{% endif %}
+  {% endfor %}
+  {% if page < pages %}<a href="{{ link(page=page + 1) }}" title="Next page">›</a>{% endif %}
+</nav>
+<div class="pager-note muted small">Showing {{ ((page - 1) * per_page + 1) | num }}–{{ [page * per_page, total] | min | num }} of {{ total | num }}</div>
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Listings · Zameen Scrapper{% endblock %}
+{% block content %}
+<style>
+  .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .page-head .sub { margin: 0; }
+
+  /* sale / rent + categories */
+  .picker { padding: 14px 16px; margin-bottom: 12px; }
+  .picker-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .cat-groups { display: grid; gap: 10px; margin-top: 14px; }
+  .cat-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: start; }
+  @media (max-width: 700px) { .cat-row { grid-template-columns: 1fr; } }
+  .cat-row > a.group { font-weight: 700; color: var(--text); padding-top: 5px; }
+  .cat-row > a.group.on { color: var(--accent); }
+  .cat-row > a.group small { font-weight: 500; font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+  /* search */
+  form.search { padding: 14px 16px; margin-bottom: 12px; }
+  .search-main { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto; gap: 10px; align-items: end; }
+  @media (max-width: 900px) { .search-main { grid-template-columns: 1fr 1fr; } .search-main .wide { grid-column: 1 / -1; } }
+  form.search label { display: flex; flex-direction: column; font-size: 12px; font-weight: 500; color: var(--muted); gap: 4px; }
+  .search-icon { position: relative; }
+  .search-icon input { padding-left: 32px; }
+  .search-icon::before { content: "⌕"; position: absolute; left: 11px; bottom: 6px; font-size: 17px; color: var(--muted); }
+  details.more { margin-top: 10px; }
+  details.more summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; width: fit-content; list-style: none; }
+  details.more summary::-webkit-details-marker { display: none; }
+  details.more summary::before { content: "▸ "; }
+  details.more[open] summary::before { content: "▾ "; }
+  .more-grid { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+  .check { flex-direction: row !important; align-items: center; gap: 8px !important; color: var(--text) !important; font-size: 13px !important; padding-bottom: 8px; }
+  .check input { width: auto; }
+
+  /* results bar */
+  .results-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 10px; }
+  .results-bar .count { font-size: 15px; }
+  .active { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 11px; border-radius: 999px;
+          background: var(--accent-soft); color: var(--accent-strong); font-size: 12.5px; font-weight: 600; }
+  .pill a { color: inherit; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; font-size: 14px; }
+  .pill a:hover { background: rgba(0, 0, 0, .08); text-decoration: none; }
+  .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .sort select { width: auto; }
+
+</style>
+{% from "_ad_card.html" import ad_card, pager %}
+
+<div class="page-head">
+  <div>
+    <h1>Listings</h1>
+    <p class="sub">Pick a category, then search. Click any ad for its full details.</p>
+  </div>
+</div>
+
+<div class="card picker">
+  <div class="picker-top">
+    <div class="seg">
+      <a href="{{ link(purpose=None) }}" class="{{ 'on' if not args.purpose }}">All</a>
+      <a href="{{ link(purpose='for-sale') }}" class="{{ 'on' if args.purpose == 'for-sale' }}">For sale</a>
+      <a href="{{ link(purpose='for-rent') }}" class="{{ 'on' if args.purpose == 'for-rent' }}">For rent</a>
+    </div>
+    <a class="chip {{ 'on' if not args.type and not args.group }}" href="{{ link(type=None, group=None) }}">All categories
+      <span>{{ chips | sum(attribute="count") | num }}</span></a>
+  </div>
+  <div class="cat-groups">
+    {% for g in chips %}
+    <div class="cat-row">
+      <a class="group {{ 'on' if args.group == g.name and not args.type }}" href="{{ link(group=g.name, type=None) }}">{{ g.name }}<small>{{ g.count | num }}</small></a>
+      <div class="chips">
+        {% for t in g.types %}
+        <a class="chip {{ 'on' if args.type == t.slug }} {{ 'empty-chip' if not t.count }}"
+           href="{{ link(type=t.slug, group=None) }}">{{ t.name }} <span>{{ t.count | num }}</span></a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<form class="card search" method="get">
+  {% for k in ("purpose", "type", "group", "city", "sort") %}{% if args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ args[k] }}">{% endif %}{% endfor %}
+  <div class="search-main">
+    <label class="wide">Area
+      <span class="search-icon"><input name="area" placeholder="e.g. F-10, DHA Phase 5, Bahria Town" value="{{ args.area or '' }}"></span></label>
+    <label>Min price (PKR)<input name="min_price" type="number" min="0" placeholder="Any" value="{{ args.min_price or '' }}"></label>
+    <label>Max price (PKR)<input name="max_price" type="number" min="0" placeholder="Any" value="{{ args.max_price or '' }}"></label>
+    <button type="submit">Search</button>
+    {% if filtered %}<a class="btn ghost" href="{{ url_for('listings', purpose=args.purpose, type=args.type, group=args.group, city=city, sort=args.sort) }}">Clear</a>{% endif %}
+  </div>
+  <details class="more" {{ 'open' if more_open }}>
+    <summary>More filters</summary>
+    <div class="more-grid">
+      <label>Title / dealer / agency<input name="q" placeholder="search text" value="{{ args.q or '' }}"></label>
+      <label>Min marla<input name="min_marla" type="number" step="any" min="0" value="{{ args.min_marla or '' }}"></label>
+      <label>Max marla<input name="max_marla" type="number" step="any" min="0" value="{{ args.max_marla or '' }}"></label>
+      <label>Beds (at least)<input name="beds" type="number" min="0" value="{{ args.beds or '' }}"></label>
+      <label>Posted on Zameen
+        <select name="posted">
+          <option value="">Any time</option>
+          {% for key, p in posted.items() %}<option value="{{ key }}" {{ 'selected' if args.posted == key }}>{{ p[0] }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="verified" value="1" {{ 'checked' if args.verified }}> Verified only</label>
+      <label class="check"><input type="checkbox" name="show" value="all" {{ 'checked' if args.show == 'all' }}> Include ads gone from Zameen</label>
+    </div>
+  </details>
+</form>
+
+<div class="results-bar">
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+    <div class="count"><b>{{ total | num }}</b> <span class="muted">ads{% if filtered %} match{% endif %}{% if city %} in {{ city }}{% endif %}</span></div>
+    {% if active %}<div class="active">{% for label, href in active %}<span class="pill">{{ label }}<a href="{{ href }}" title="Remove this filter">×</a></span>{% endfor %}</div>{% endif %}
+  </div>
+  <form class="sort" method="get">
+    {% for k, v in args.items() if k not in ("sort", "page") %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    Sort by
+    <select name="sort" onchange="this.form.submit()">
+      {% for key, s in sorts.items() %}<option value="{{ key }}" {{ 'selected' if sort == key }}>{{ s[0] }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if rows %}
+<div class="ads">
+  {% for r in rows %}{{ ad_card(r, city, labels) }}{% endfor %}
+</div>
+{{ pager(page, pages, page_links, link, total, per_page) }}
+{% else %}
+<div class="card empty muted">
+  <div class="big">🔍</div>
+  <p>No ads match these filters{% if city %} in {{ city }}{% endif %}.</p>
+  <a class="btn ghost" href="{{ url_for('listings', city=city) }}">Clear all filters</a>
+</div>
+{% endif %}
+{% endblock %}

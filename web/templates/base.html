@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% block head %}{% endblock %}
+<title>{% block title %}Zameen Scrapper{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #ffffff; --soft: #f8fafb; --text: #17202e; --muted: #667085; --line: #e4e7ec;
+    --accent: #12805c; --accent-soft: #e3f4ed; --accent-strong: #0b5e43;
+    --good: #12805c; --good-soft: #e3f4ed; --ok: #a15c07; --ok-soft: #fdf1dc; --low: #c0362c; --low-soft: #fdeceb;
+    --blue: #2a5bd7; --blue-soft: #e8eefc;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141b; --card: #171e27; --soft: #1c2430; --text: #e6e9ee; --muted: #98a2b3; --line: #2a3441;
+      --accent: #3cc48f; --accent-soft: #163a2d; --accent-strong: #6fdcb0;
+      --good: #3cc48f; --good-soft: #163a2d; --ok: #f0b252; --ok-soft: #3d2e14; --low: #f27a70; --low-soft: #40201d;
+      --blue: #7ea2ff; --blue-soft: #1d2a4a; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 0 20px; }
+
+  header { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header .wrap { display: flex; align-items: center; gap: 28px; height: 58px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; color: var(--text); }
+  .brand i { width: 28px; height: 28px; border-radius: 7px; background: var(--accent); display: grid;
+             place-items: center; color: #fff; font-style: normal; font-size: 14px; }
+  header nav { display: flex; gap: 4px; }
+  header nav a { color: var(--muted); font-weight: 500; padding: 6px 12px; border-radius: 6px; }
+  header nav a:hover { background: var(--soft); text-decoration: none; }
+  header nav a.on { color: var(--accent); background: var(--accent-soft); }
+  .city-switch { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 15px; }
+  .city-switch select { width: auto; font-weight: 600; padding: 6px 10px; }
+  .brand { white-space: nowrap; }
+  header nav a { white-space: nowrap; }
+  @media (max-width: 720px) {
+    header .wrap { flex-wrap: wrap; height: auto; padding-top: 8px; padding-bottom: 8px; gap: 8px 14px; }
+    header nav { order: 3; width: 100%; overflow-x: auto; }
+    .wrap { padding: 0 16px; }
+  }
+
+  main { padding: 28px 0 56px; }
+  h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.01em; }
+  h2 { font-size: 17px; margin: 36px 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .tile { padding: 16px 18px; }
+  .tile .label { color: var(--muted); font-size: 12px; font-weight: 500; }
+  .tile .value { font-size: 26px; font-weight: 650; margin-top: 4px; letter-spacing: -.01em; }
+  .tile .hint { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--soft); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: var(--soft); }
+  td.n, th.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+           white-space: nowrap; vertical-align: 1px; }
+  .b-good { background: var(--good-soft); color: var(--good); }
+  .b-ok   { background: var(--ok-soft);   color: var(--ok); }
+  .b-low  { background: var(--low-soft);  color: var(--low); }
+  .b-blue { background: var(--blue-soft); color: var(--blue); }
+  .b-none { background: var(--soft); color: var(--muted); border: 1px solid var(--line); }
+
+  .bar { height: 8px; background: var(--soft); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+  .bar.good span { background: var(--good); } .bar.ok span { background: var(--ok); } .bar.low span { background: var(--low); }
+
+  input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px;
+                  background: var(--card); color: var(--text); width: 100%; }
+  input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  button, .btn { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 7px; border: 0; cursor: pointer;
+                 background: var(--accent); color: #fff; display: inline-block; white-space: nowrap; }
+  button:hover, .btn:hover { background: var(--accent-strong); text-decoration: none; }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .btn.ghost:hover { background: var(--soft); }
+
+  /* sale / rent switch and category chips (Listings, New listings) */
+  .seg { display: inline-flex; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+  .seg a { padding: 6px 16px; border-radius: 7px; font-weight: 650; color: var(--muted); white-space: nowrap; }
+  .seg a:hover { text-decoration: none; color: var(--text); }
+  .seg a.on { background: var(--card); color: var(--accent); box-shadow: var(--shadow); outline: 1px solid var(--line); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 12px; border-radius: 999px;
+          border: 1px solid var(--line); background: var(--card); color: var(--text); font-weight: 600; font-size: 13.5px; }
+  .chip span { font-weight: 500; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip:hover { border-color: var(--accent); text-decoration: none; }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.on span { color: rgba(255, 255, 255, .85); }
+  .chip.empty-chip { opacity: .45; }
+
+  /* one ad as a card (_ad_card.html) */
+  .ads { display: grid; gap: 10px; }
+  .ad { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 20px; padding: 14px 18px; position: relative;
+        transition: border-color .12s, box-shadow .12s; }
+  .ad:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(16, 24, 40, .08); }
+  .ad .kind { font-size: 12px; font-weight: 600; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ad h3 { margin: 3px 0 4px; font-size: 15.5px; line-height: 1.35; font-weight: 650; }
+  .ad h3 a { color: var(--text); }
+  .ad h3 a::after { content: ""; position: absolute; inset: 0; }    /* whole card opens the ad */
+  .ad:hover h3 a { color: var(--accent); }
+  .ad .where { color: var(--muted); font-size: 13px; }
+  .ad .facts { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; }
+  .ad .facts span { display: inline-flex; gap: 5px; align-items: center; }
+  .ad .facts b { font-weight: 650; }
+  .ad .right { text-align: right; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; min-width: 130px; }
+  .ad .price { font-size: 20px; font-weight: 750; color: var(--accent); white-space: nowrap; letter-spacing: -.01em; }
+  .ad .price small { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .ad .per { font-size: 12px; color: var(--muted); }
+  .ad .foot { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+              border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+  .ad .foot .dealer b { color: var(--text); font-weight: 600; }
+  .ad .foot a { position: relative; z-index: 1; }     /* stays clickable above the card link */
+  .ad.gone { opacity: .7; }
+  @media (max-width: 600px) { .ad { grid-template-columns: 1fr; } .ad .right { text-align: left; } }
+
+  .pager { display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+  .pager a, .pager span.cur, .pager span.gap { min-width: 36px; height: 36px; padding: 0 10px; display: inline-grid; place-items: center;
+            border-radius: 8px; font-weight: 600; }
+  .pager a { border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  .pager a:hover { border-color: var(--accent); text-decoration: none; }
+  .pager span.cur { background: var(--accent); color: #fff; }
+  .pager span.gap { color: var(--muted); }
+  .pager-note { text-align: center; margin-top: 8px; }
+  .empty { padding: 48px 20px; text-align: center; }
+  .empty .big { font-size: 34px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="{{ url_for('overview') }}"><i>Z</i>Zameen Scrapper</a>
+  <nav>
+    <a href="{{ url_for('overview', city=city) }}" class="{{ 'on' if request.endpoint == 'overview' }}">Overview</a>
+    <a href="{{ url_for('listings', city=city) }}" class="{{ 'on' if request.endpoint in ('listings', 'listing') }}">Listings</a>
+    <a href="{{ url_for('new_listings', city=city) }}" class="{{ 'on' if request.endpoint == 'new_listings' }}">New listings</a>
+  </nav>
+  <label class="city-switch" title="Show one city, or all cities">📍
+    <select onchange="location = this.value">
+      {% for c in city_switch %}<option value="{{ c.url }}" {{ 'selected' if c.name == city }}>{{ c.label }}</option>{% endfor %}
+    </select>
+  </label>
+</div></header>
+<main><div class="wrap">
+{% block content %}{% endblock %}
+</div></main>
+</body>
+</html>

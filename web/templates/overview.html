@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block head %}{% if running or running_check %}<meta http-equiv="refresh" content="30">{% endif %}{% endblock %}
+{% block content %}
+<style>
+  .live { padding: 18px 20px; border-left: 4px solid var(--accent); margin-bottom: 24px; }
+  .live-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .live-title { font-weight: 650; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  .live .bar { height: 12px; margin: 14px 0 10px; }
+  .live-stats { display: flex; gap: 28px; flex-wrap: wrap; font-size: 13px; }
+  .live-stats b { font-size: 15px; display: block; }
+
+  .groups { display: grid; gap: 16px; }
+  .group-head { display: flex; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .group-head strong { font-size: 15px; }
+  td.type { font-weight: 600; white-space: nowrap; }
+  .cell { min-width: 220px; }
+  .cell-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .cell-top b { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cell .bar { height: 6px; margin: 6px 0 3px; }
+  .cell-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .na { color: var(--muted); font-size: 12px; }
+  th.split { width: 42%; }
+
+  .auto { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .auto-state { display: flex; align-items: center; gap: 12px; }
+  .auto-state .big { font-size: 16px; font-weight: 650; }
+  .auto form { margin: 0; }
+  .btn.stop { background: var(--low); }
+  .btn.stop:hover { background: var(--low); filter: brightness(.9); }
+</style>
+
+<h1>Overview <span class="muted" style="font-weight: 500">· {{ city or "All cities" }}</span></h1>
+<p class="sub">Islamabad property ads on Zameen.com, saved in our database.
+  {% if running %}<span class="muted">This page refreshes itself every 30 seconds while a scrape is running.</span>{% endif %}</p>
+
+{% for r in running %}
+{% set cov = (r.seen / r.expected_total) if r.expected_total else 0 %}
+<div class="card live">
+  <div class="live-top">
+    <div class="live-title"><span class="dot"></span>Scraping now: {{ labels.get(r.category_key, r.category_key) }} in {{ r.city }}</div>
+    <div class="muted small">started {{ r.started_at.strftime("%H:%M") }} · running {{ r.started_at | duration }}</div>
+  </div>
+  <div class="bar"><span style="width: {{ (cov * 100) | round(1) if cov < 1 else 100 }}%"></span></div>
+  <div class="live-stats">
+    <div><b>{{ r.seen | num }} / {{ r.expected_total | num }}</b><span class="muted">ads seen ({{ cov | pct }})</span></div>
+    <div><b>{{ r.areas_done }} / {{ r.areas }}</b><span class="muted">areas done</span></div>
+    <div><b>{{ r.pages_fetched | num }}</b><span class="muted">pages loaded</span></div>
+    <div><b style="color: {{ 'var(--low)' if r.errors else 'inherit' }}">{{ r.errors }}</b><span class="muted">errors</span></div>
+  </div>
+</div>
+{% endfor %}
+
+{% if running_check %}
+<div class="card live">
+  <div class="live-top">
+    <div class="live-title"><span class="dot"></span>Checking for new ads
+      <span class="muted small" style="font-weight: 400">{{ running_check.cities }}</span>
+      {% if running_check.scheduled %}<span class="badge b-blue">scheduled</span>{% endif %}</div>
+    <div class="muted small">started {{ running_check.started_at.strftime("%H:%M") }} · running {{ running_check.started_at | duration }}</div>
+  </div>
+  <div class="live-stats" style="margin-top: 12px">
+    <div><b>{{ running_check.new_listings | num }}</b><span class="muted">new ads so far</span></div>
+    <div><b>{{ running_check.pages_fetched | num }}</b><span class="muted">pages loaded</span></div>
+    <div><b>{{ running_check.categories }}</b><span class="muted">categories to check</span></div>
+    <div><b style="color: {{ 'var(--low)' if running_check.errors else 'inherit' }}">{{ running_check.errors }}</b><span class="muted">errors</span></div>
+  </div>
+</div>
+{% endif %}
+
+<div class="tiles">
+  <div class="card tile"><div class="label">Active ads saved</div><div class="value">{{ totals.active | num }}</div>
+    <div class="hint">of {{ zameen_total | num }} on Zameen ({{ (totals.active / zameen_total) | pct if zameen_total else "-" }})</div></div>
+  <div class="card tile"><div class="label">Posted in last 24 h</div>
+    <div class="value"><a href="{{ url_for('listings', posted='24h', city=city) }}">{{ totals.last_24h | num }}</a></div>
+    <div class="hint">new on Zameen</div></div>
+  <div class="card tile"><div class="label">For sale</div><div class="value">{{ totals.for_sale | num }}</div></div>
+  <div class="card tile"><div class="label">For rent</div><div class="value">{{ totals.for_rent | num }}</div></div>
+  <div class="card tile"><div class="label">Verified by Zameen</div><div class="value">{{ totals.verified | num }}</div>
+    <div class="hint">{{ (totals.verified / totals.active) | pct if totals.active else "-" }} of active ads</div></div>
+  <div class="card tile"><div class="label">Agencies</div><div class="value">{{ totals.agencies | num }}</div></div>
+  <div class="card tile"><div class="label">Areas</div><div class="value">{{ totals.areas | num }}</div></div>
+</div>
+
+<h2>Cities <small>click a city to see only its data</small></h2>
+<div class="card table-wrap"><table>
+  <thead><tr><th>City</th><th class="n">Active ads saved</th><th class="n">On Zameen</th>
+      <th>Coverage</th><th>Last full scrape</th>
+      <th title="Set by itself from how many new ads each check finds">New-ad check every</th><th>Next new-ad check</th></tr></thead>
+  <tbody>
+  {% for c in city_rows %}
+  <tr style="{{ 'background: var(--accent-soft)' if c.name == city }}">
+    <td><a href="{{ url_for('overview', city=c.name) }}"><b>{{ c.name }}</b></a></td>
+    <td class="n">{{ c.active | num if c.active else "-" }}</td>
+    <td class="n">{{ c.on_zameen | num if c.on_zameen else "not probed yet" }}</td>
+    <td>{% if c.coverage is not none %}<span class="badge b-{{ c.coverage | level }}">{{ c.coverage | pct }}</span>
+        {% else %}<span class="muted small">{{ "not scraped yet" if not c.active else "-" }}</span>{% endif %}</td>
+    <td class="muted">{{ c.finished.strftime("%d %b %Y, %H:%M") if c.finished else "-" }}</td>
+    {% if c.pace %}
+    <td title="last check: {{ c.pace.new }} new ads in {{ c.pace.hours }} h">{{ c.pace.every }} h</td>
+    <td class="muted">{{ c.pace.next | pk_time }}</td>
+    {% else %}
+    <td class="muted">-</td><td class="muted">next run</td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2>Categories{{ " in " ~ city if city else " (all cities)" }} <small>ads we have vs. what Zameen shows ·
+  <span class="badge b-good">95%+</span> <span class="badge b-ok">80–95%</span> <span class="badge b-low">below 80%</span></small></h2>
+<div class="groups">
+{% for group, rows in groups.items() %}
+  <div class="card">
+    <div class="group-head"><strong>{{ group }}</strong></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th class="split">For sale</th><th class="split">For rent</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="type">{{ r.name }}</td>
+        {% for c in (r.get("sale"), r.get("rent")) %}
+        <td class="cell">
+          {% if not c %}<span class="na">Zameen has no such page</span>
+          {% elif c.status is none %}<span class="na">not scraped yet · {{ c.on_zameen | num }} on Zameen</span>
+          {% else %}
+            <div class="cell-top">
+              <a href="{{ url_for('listings', category=c.key, city=city) }}"><b>{{ c.active | num }}</b></a>
+              {% if c.status == "running" %}<span class="badge b-blue">scraping…</span>
+              {% else %}<span class="badge b-{{ c.coverage | level }}">{{ c.coverage | pct }}</span>{% endif %}
+            </div>
+            <div class="bar {{ c.coverage | level }}"><span style="width: {{ ((c.coverage or 0) * 100) | round(1) if (c.coverage or 0) < 1 else 100 }}%"></span></div>
+            <div class="cell-meta"><span>of {{ c.on_zameen | num }} on Zameen</span>
+              <span>{% if c.median_price %}typical {{ c.median_price | int | pkr }}{% endif %}</span></div>
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+{% endfor %}
+</div>
+
+<h2 id="auto">Automatic new-ad checks <small>wakes up every {{ auto.every }} hours, newest ads first ·
+  all {{ auto.cities }} cities, each at its own pace (Cities table above) · one on/off switch:
+  <code>NEW_CHECKS_ENABLED</code> in .env</small></h2>
+<div class="card auto">
+  <div class="auto-state">
+    {% if not auto.enabled %}
+      <span class="badge b-low">off</span>
+      <div><div class="big">Switched off in .env</div>
+        <div class="muted small">To turn on: set <code>NEW_CHECKS_ENABLED=true</code> in the .env file
+          {% if not auto.installed %}and run <code>python main.py schedule install</code>{% endif %}</div></div>
+    {% elif not auto.installed %}
+      <span class="badge b-none">not set up</span>
+      <div><div class="big">Not switched on yet</div>
+        <div class="muted small">Set up with: <code>python main.py schedule install</code></div></div>
+    {% elif auto.paused %}
+      <span class="badge b-ok">paused</span>
+      <div><div class="big">Paused: no automatic checks</div>
+        <div class="muted small">Press Resume to start again{% if auto.next_run %} · next slot {{ auto.next_run }}{% endif %}</div></div>
+    {% else %}
+      <span class="badge b-good">on</span>
+      <div><div class="big">Running every {{ auto.every }} hours</div>
+        <div class="muted small">Next check {{ auto.next_run or "-" }}{% if auto.last_run and "1999" not in auto.last_run %} · last {{ auto.last_run }}{% endif %}</div></div>
+    {% endif %}
+  </div>
+  {% if auto.installed and auto.enabled %}
+  <form method="post" action="{{ url_for('auto_check', city=city) }}">
+    {% if auto.paused %}
+      <button name="action" value="resume">▶ Resume</button>
+    {% else %}
+      <button class="btn stop" name="action" value="pause"
+              title="Stops scheduled checks; a check that's running stops after its current page">■ Pause</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+
+{% if checks %}
+<div class="card table-wrap" style="margin-top: 12px"><table>
+  <thead><tr><th>Check</th><th>Cities</th><th>Status</th><th>Started</th><th class="n">Took</th><th class="n">New ads</th>
+      <th class="n">Price changes</th><th class="n">Pages</th><th class="n">Errors</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for c in checks %}
+  <tr>
+    <td><b>#{{ c.id }}</b> <span class="muted small">{{ "scheduled" if c.scheduled else "by hand" }}</span></td>
+    <td class="small">{{ c.cities or "Islamabad" }}</td>
+    <td>{% if c.status == "done" %}<span class="badge b-good">done</span>
+        {% elif c.status == "running" and running_check %}<span class="badge b-blue">running</span>
+        {% elif c.status == "failed" %}<span class="badge b-low">failed</span>
+        {% else %}<span class="badge b-ok">{{ "stopped" if c.status == "running" else c.status }}</span>{% endif %}</td>
+    <td class="muted">{{ c.started_at.strftime("%d %b, %H:%M") }}</td>
+    <td class="n">{{ c.started_at | duration(c.finished_at) }}</td>
+    <td class="n"><b>{{ c.new_listings | num }}</b></td><td class="n">{{ c.price_changes | num }}</td>
+    <td class="n">{{ c.pages_fetched | num }}</td>
+    <td class="n" style="{{ 'color: var(--low); font-weight: 600' if c.errors }}">{{ c.errors }}</td>
+    <td class="muted small">{{ c.note or "" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+
+<h2>Recent scrape runs{{ " in " ~ city if city }} <small>full scrapes, category by category</small></h2>
+{% if passes %}
+<div class="card table-wrap"><table>
+  <thead><tr><th>City</th><th>Category</th><th>Status</th><th>Started</th><th class="n">Took</th><th class="n">Ads seen</th>
+      <th class="n">On Zameen</th><th class="n">Pages</th><th class="n">Errors</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for p in passes %}
+  <tr>
+    <td>{{ p.city }}</td>
+    <td><b>{{ labels.get(p.category_key, p.category_key) }}</b></td>
+    <td>{% if p.status == "done" %}<span class="badge b-good">done</span>
+        {% elif p.status == "running" %}<span class="badge b-blue">running</span>
+        {% else %}<span class="badge b-ok">{{ p.status }}</span>{% endif %}</td>
+    <td class="muted">{{ p.started_at.strftime("%d %b, %H:%M") }}</td>
+    <td class="n">{{ p.started_at | duration(p.finished_at) }}</td>
+    <td class="n">{{ p.saved | num }}</td><td class="n">{{ p.expected_total | num }}</td>
+    <td class="n">{{ p.pages_fetched | num }}</td>
+    <td class="n" style="{{ 'color: var(--low); font-weight: 600' if p.errors }}">{{ p.errors }}</td>
+    <td class="muted small">{{ p.note or "" }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="muted">No scrape runs yet.</p>
+{% endif %}
+{% endblock %}
